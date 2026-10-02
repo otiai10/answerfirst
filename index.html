@@ -101,6 +101,26 @@
     min-height: 1.4em;
     margin: 0 0 24px;
   }
+  .hint-toggle {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: .85rem;
+    cursor: pointer;
+  }
+  .hint-toggle input { accent-color: var(--accent); margin: 0; }
+  .hint {
+    margin: 20px 0 0;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border);
+    color: var(--muted);
+    font-size: .95rem;
+  }
+  .hint b { color: var(--text); font-weight: 600; }
+  .hint[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -108,8 +128,10 @@
   <h1>ANSWER FIRST</h1>
   <nav class="levels" id="levels"></nav>
   <p class="level-desc" id="level-desc"></p>
+  <label class="hint-toggle"><input type="checkbox" id="hint-toggle"> ヒント</label>
   <section class="card">
     <p class="question" id="question"><span class="placeholder"></span></p>
+    <p class="hint" id="hint" hidden></p>
   </section>
 
   <button id="next">次の質問</button>
@@ -119,10 +141,13 @@
 <script>
 let LEVELS = {};
 let QUESTIONS = [];
+let TECHNIQUES = [];
 
 const qEl = document.getElementById("question");
 const levelsEl = document.getElementById("levels");
 const descEl = document.getElementById("level-desc");
+const hintEl = document.getElementById("hint");
+const hintToggle = document.getElementById("hint-toggle");
 let deck = [];
 
 function shuffle(arr) {
@@ -139,13 +164,34 @@ function next() {
   if (deck.length === 0) deck = shuffle(QUESTIONS);
   const q = deck.pop();
   qEl.textContent = q;
+  showHint();
 }
+
+function showHint() {
+  if (!hintToggle.checked || !qEl.textContent || TECHNIQUES.length === 0) {
+    hintEl.hidden = true;
+    return;
+  }
+  const t = TECHNIQUES[Math.floor(Math.random() * TECHNIQUES.length)];
+  hintEl.innerHTML = "";
+  const phrase = document.createElement("b");
+  phrase.textContent = t.phrase;
+  hintEl.append("ヒント：", phrase, `（${t.role}）`);
+  hintEl.hidden = false;
+}
+
+try { hintToggle.checked = localStorage.getItem("hint") === "on"; } catch (e) {}
+hintToggle.addEventListener("change", () => {
+  try { localStorage.setItem("hint", hintToggle.checked ? "on" : "off"); } catch (e) {}
+  showHint();
+});
 
 function selectLevel(key) {
   const level = LEVELS[key];
   QUESTIONS = level.questions;
   deck = [];
   qEl.textContent = "";
+  hintEl.hidden = true;
   descEl.textContent = level.description || "";
   for (const btn of levelsEl.children) {
     btn.setAttribute("aria-pressed", String(btn.dataset.key === key));
@@ -170,14 +216,18 @@ function renderLevels() {
 
 fetch("questions.json")
   .then((res) => res.json())
-  .then((data) => { LEVELS = data.levels; renderLevels(); })
+  .then((data) => {
+    LEVELS = data.levels;
+    TECHNIQUES = Object.values(data.technique || {}).flat();
+    renderLevels();
+  })
   .catch(() => {
     qEl.textContent = "questions.json を読み込めませんでした。ローカルで開く場合は HTTP サーバー経由で開いてください。";
   });
 
 document.getElementById("next").addEventListener("click", next);
 document.addEventListener("keydown", (e) => {
-  if (e.target.closest(".levels")) return;
+  if (e.target.closest(".levels, .hint-toggle")) return;
   if (e.key === " " || e.key === "Enter") { e.preventDefault(); next(); }
 });
 </script>
