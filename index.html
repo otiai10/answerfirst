@@ -71,11 +71,43 @@
     cursor: pointer;
   }
   button:active { transform: translateY(1px); }
+  .levels {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 24px 0 8px;
+  }
+  .levels button {
+    width: auto;
+    margin: 0;
+    padding: 8px 18px;
+    font-size: .9rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--text);
+  }
+  .levels button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
+  .levels button:disabled { opacity: .4; cursor: default; }
+  .level-desc {
+    color: var(--muted);
+    font-size: .85rem;
+    text-align: center;
+    min-height: 1.4em;
+    margin: 0 0 24px;
+  }
 </style>
 </head>
 <body>
 <main>
   <h1>ANSWER FIRST</h1>
+  <nav class="levels" id="levels"></nav>
+  <p class="level-desc" id="level-desc"></p>
   <section class="card">
     <p class="question" id="question"><span class="placeholder"></span></p>
   </section>
@@ -85,9 +117,12 @@
 </main>
 
 <script>
+let LEVELS = {};
 let QUESTIONS = [];
 
 const qEl = document.getElementById("question");
+const levelsEl = document.getElementById("levels");
+const descEl = document.getElementById("level-desc");
 let deck = [];
 
 function shuffle(arr) {
@@ -106,15 +141,43 @@ function next() {
   qEl.textContent = q;
 }
 
+function selectLevel(key) {
+  const level = LEVELS[key];
+  QUESTIONS = level.questions;
+  deck = [];
+  qEl.textContent = "";
+  descEl.textContent = level.description || "";
+  for (const btn of levelsEl.children) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.key === key));
+  }
+  try { localStorage.setItem("level", key); } catch (e) {}
+}
+
+function renderLevels() {
+  for (const [key, level] of Object.entries(LEVELS)) {
+    const btn = document.createElement("button");
+    btn.dataset.key = key;
+    btn.textContent = level.label || key;
+    btn.disabled = level.questions.length === 0;
+    btn.addEventListener("click", () => selectLevel(key));
+    levelsEl.appendChild(btn);
+  }
+  let saved = null;
+  try { saved = localStorage.getItem("level"); } catch (e) {}
+  const available = Object.keys(LEVELS).filter((k) => LEVELS[k].questions.length > 0);
+  selectLevel(available.includes(saved) ? saved : available[0]);
+}
+
 fetch("questions.json")
   .then((res) => res.json())
-  .then((data) => { QUESTIONS = data; })
+  .then((data) => { LEVELS = data; renderLevels(); })
   .catch(() => {
     qEl.textContent = "questions.json を読み込めませんでした。ローカルで開く場合は HTTP サーバー経由で開いてください。";
   });
 
 document.getElementById("next").addEventListener("click", next);
 document.addEventListener("keydown", (e) => {
+  if (e.target.closest(".levels")) return;
   if (e.key === " " || e.key === "Enter") { e.preventDefault(); next(); }
 });
 </script>
