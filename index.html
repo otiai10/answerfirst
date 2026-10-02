@@ -170,7 +170,7 @@ function renderLevels() {
 
 fetch("questions.json")
   .then((res) => res.json())
-  .then((data) => { LEVELS = data; renderLevels(); })
+  .then((data) => { LEVELS = data.levels; renderLevels(); })
   .catch(() => {
     qEl.textContent = "questions.json を読み込めませんでした。ローカルで開く場合は HTTP サーバー経由で開いてください。";
   });
