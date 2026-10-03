@@ -287,6 +287,30 @@ settingsPanel.addEventListener("keydown", (e) => {
 let LEVELS = {};
 let QUESTIONS = [];
 let TECHNIQUES = [];
+const initialParams = new URLSearchParams(location.search);
+let selectedLevel = null;
+
+function readSetting(param, storageKey, allowed, fallback) {
+  const value = initialParams.get(param);
+  if (allowed.includes(value)) return value;
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (allowed.includes(saved)) return saved;
+  } catch (e) {}
+  return fallback;
+}
+
+function updateSettingsUrl() {
+  if (selectedLevel === null) return;
+  const url = new URL(location.href);
+  url.searchParams.set("level", selectedLevel.replace(/^level_/, ""));
+  url.searchParams.set("hint", hintToggle.checked ? "on" : "off");
+  url.searchParams.set("speech", speechToggle.checked ? "on" : "off");
+  url.searchParams.set("countdown", countdownSetting.value);
+  url.searchParams.set("answer_time", answerTimeSetting.value);
+  url.searchParams.set("endless", endlessToggle.checked ? "on" : "off");
+  history.replaceState(history.state, "", url);
+}
 
 const qEl = document.getElementById("question");
 const levelsEl = document.getElementById("levels");
@@ -310,7 +334,7 @@ const speechSupported = "speechSynthesis" in window && "SpeechSynthesisUtterance
 let speechUtterance = null;
 speechToggle.disabled = !speechSupported;
 if (!speechSupported) speechToggle.title = "このブラウザは読み上げに対応していません";
-try { speechToggle.checked = speechSupported && localStorage.getItem("speech") === "on"; } catch (e) {}
+speechToggle.checked = speechSupported && readSetting("speech", "speech", ["on", "off"], "off") === "on";
 speechToggle.addEventListener("change", () => {
   stopSession();
   try { localStorage.setItem("speech", speechToggle.checked ? "on" : "off"); } catch (e) {}
@@ -391,11 +415,8 @@ function startAnswerTime() {
   };
 }
 
-try {
-  const saved = localStorage.getItem("answer_time_seconds");
-  if (["0", "10", "20", "30"].includes(saved)) answerTimeSetting.value = saved;
-} catch (e) {}
-try { endlessToggle.checked = localStorage.getItem("endless") === "on"; } catch (e) {}
+answerTimeSetting.value = readSetting("answer_time", "answer_time_seconds", ["0", "10", "20", "30"], "0");
+endlessToggle.checked = readSetting("endless", "endless", ["on", "off"], "off") === "on";
 syncEndlessSetting();
 endlessToggle.addEventListener("change", syncEndlessSetting);
 answerTimeSetting.addEventListener("change", () => {
@@ -434,10 +455,7 @@ function startCountdown() {
   countdownTimer = requestAnimationFrame(tick);
 }
 
-try {
-  const saved = localStorage.getItem("countdown_seconds");
-  if (["0", "3", "5", "10"].includes(saved)) countdownSetting.value = saved;
-} catch (e) {}
+countdownSetting.value = readSetting("countdown", "countdown_seconds", ["0", "3", "5", "10"], "5");
 countdownSetting.addEventListener("change", () => {
   stopSession();
   try { localStorage.setItem("countdown_seconds", countdownSetting.value); } catch (e) {}
@@ -477,15 +495,17 @@ function showHint() {
   hintEl.hidden = false;
 }
 
-try { hintToggle.checked = localStorage.getItem("hint") === "on"; } catch (e) {}
+hintToggle.checked = readSetting("hint", "hint", ["on", "off"], "off") === "on";
 hintToggle.addEventListener("change", () => {
   try { localStorage.setItem("hint", hintToggle.checked ? "on" : "off"); } catch (e) {}
   showHint();
 });
+settingsPanel.addEventListener("change", updateSettingsUrl);
 
-function selectLevel(key) {
+function selectLevel(key, updateUrl = true) {
   stopSession();
   const level = LEVELS[key];
+  selectedLevel = key;
   QUESTIONS = level.questions;
   deck = [];
   qEl.textContent = "";
@@ -495,6 +515,7 @@ function selectLevel(key) {
     btn.setAttribute("aria-pressed", String(btn.dataset.key === key));
   }
   try { localStorage.setItem("level", key); } catch (e) {}
+  if (updateUrl) updateSettingsUrl();
 }
 
 function renderLevels() {
@@ -509,7 +530,10 @@ function renderLevels() {
   let saved = null;
   try { saved = localStorage.getItem("level"); } catch (e) {}
   const available = Object.keys(LEVELS).filter((k) => LEVELS[k].questions.length > 0);
-  selectLevel(available.includes(saved) ? saved : available[0]);
+  const requested = initialParams.get("level");
+  const requestedKey = requested && (requested.startsWith("level_") ? requested : `level_${requested}`);
+  if (available.includes(requestedKey)) saved = requestedKey;
+  selectLevel(available.includes(saved) ? saved : available[0], false);
 }
 
 fetch("questions.json")
