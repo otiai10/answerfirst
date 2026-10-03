@@ -122,10 +122,10 @@
   }
   .icon-button:hover { background: var(--border); color: var(--text); }
   .icon-button svg { width: 24px; height: 24px; }
-  .settings-open { position: fixed; top: 12px; right: 12px; }
+  .settings-open { position: fixed; bottom: max(12px, env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); }
   .settings-panel {
     position: fixed;
-    inset: 0 0 0 auto;
+    inset: 0 auto 0 0;
     width: min(320px, 100vw);
     max-width: none;
     height: 100vh;
@@ -134,18 +134,18 @@
     margin: 0;
     padding: 24px;
     border: 0;
-    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
     background: var(--card);
     color: var(--text);
     overflow-y: auto;
-    transform: translateX(100%);
+    transform: translateX(-100%);
     transition: transform 220ms ease, display 220ms allow-discrete,
       overlay 220ms allow-discrete;
   }
   .settings-panel[open] { transform: translateX(0); }
   .settings-panel::backdrop { background: rgb(0 0 0 / .3); }
   @starting-style {
-    .settings-panel[open] { transform: translateX(100%); }
+    .settings-panel[open] { transform: translateX(-100%); }
   }
   @media (prefers-reduced-motion: reduce) {
     .settings-panel { transition: none; }
