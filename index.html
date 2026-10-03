@@ -176,6 +176,7 @@
   }
   .hint-toggle input:checked { background: var(--accent); border-color: var(--accent); }
   .hint-toggle input:checked::before { transform: translateX(18px); background: var(--accent-text); }
+  .hint-toggle input:disabled { opacity: .4; cursor: default; }
   .countdown-setting { display: grid; gap: 12px; margin-bottom: 28px; }
   .answer-time { height: 6px; margin-top: 24px; overflow: hidden; border-radius: 999px; background: var(--border); }
   .answer-time-bar { width: 100%; height: 100%; margin-inline: auto; background: #e88a2d; }
@@ -208,6 +209,7 @@
     </button>
   </div>
   <label class="hint-toggle">ヒントあり<input type="checkbox" id="hint-toggle" role="switch"></label>
+  <label class="hint-toggle">読み上げ<input type="checkbox" id="speech-toggle" role="switch"></label>
   <label class="countdown-setting">回答前カウントダウン
     <select id="countdown-setting">
       <option value="0">使わない</option>
@@ -264,12 +266,13 @@ settingsPanel.addEventListener("click", (e) => {
        e.clientY < rect.top || e.clientY > rect.bottom)) settingsPanel.close();
 });
 settingsPanel.addEventListener("close", () => {
+  stopSpeech();
   settingsOpen.setAttribute("aria-expanded", "false");
   settingsOpen.focus();
 });
 settingsPanel.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  const controls = settingsPanel.querySelectorAll("button, input, select");
+  const controls = settingsPanel.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled)");
   const first = controls[0];
   const last = controls[controls.length - 1];
   if (e.shiftKey && document.activeElement === first) {
@@ -302,9 +305,57 @@ let answerAnimation = null;
 const endlessToggle = document.getElementById("endless-toggle");
 const nextButton = document.getElementById("next");
 let endlessRunning = false;
+const speechToggle = document.getElementById("speech-toggle");
+const speechSupported = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+let speechUtterance = null;
+speechToggle.disabled = !speechSupported;
+if (!speechSupported) speechToggle.title = "このブラウザは読み上げに対応していません";
+try { speechToggle.checked = speechSupported && localStorage.getItem("speech") === "on"; } catch (e) {}
+speechToggle.addEventListener("change", () => {
+  stopSession();
+  try { localStorage.setItem("speech", speechToggle.checked ? "on" : "off"); } catch (e) {}
+});
+
+function stopSpeech() {
+  if (!speechUtterance) return;
+  speechUtterance.onend = null;
+  speechUtterance.onerror = null;
+  speechUtterance = null;
+  window.speechSynthesis.cancel();
+}
+
+function readQuestion(text) {
+  if (!speechToggle.checked || !speechSupported) {
+    startCountdown();
+    return;
+  }
+  speakJapanese(text, startCountdown);
+}
+
+function speakJapanese(text, onFinished) {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "ja-JP";
+  utterance.rate = 1.3;
+  const voices = window.speechSynthesis.getVoices().filter(v => /^ja(?:[-_]|$)/i.test(v.lang));
+  const voice = voices.find(v => v.name === "Google 日本語") ||
+    voices.find(v => v.name === "Kyoko") || voices[0];
+  if (voice) utterance.voice = voice;
+  speechUtterance = utterance;
+  function finish() {
+    if (speechUtterance !== utterance) return;
+    speechUtterance = null;
+    utterance.onend = null;
+    utterance.onerror = null;
+    onFinished();
+  }
+  utterance.onend = finish;
+  utterance.onerror = finish;
+  try { window.speechSynthesis.speak(utterance); } catch (e) { finish(); }
+}
 
 function stopSession() {
   endlessRunning = false;
+  stopSpeech();
   stopCountdown();
   resetAnswerTime();
   nextButton.textContent = endlessToggle.checked ? "開始" : "次の質問";
@@ -403,12 +454,14 @@ function shuffle(arr) {
 
 function next() {
   if (QUESTIONS.length === 0) return;
+  stopSpeech();
+  stopCountdown();
   if (deck.length === 0) deck = shuffle(QUESTIONS);
   const q = deck.pop();
   qEl.textContent = q;
   showHint();
   resetAnswerTime();
-  startCountdown();
+  readQuestion(q);
 }
 
 function showHint() {
