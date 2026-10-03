@@ -121,6 +121,18 @@
   }
   .hint b { color: var(--text); font-weight: 600; }
   .hint[hidden] { display: none; }
+  .controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .controls .hint-toggle { margin: 0; }
+  .countdown-setting { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .85rem; }
+  select { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+  .countdown-slot { height: 148px; display: grid; place-items: center; margin-top: 24px; }
+  .countdown { --sweep: 0deg; width: 128px; height: 128px; position: relative; display: grid; place-items: center; border: 1px solid var(--muted); border-radius: 50%; color: var(--text); background: conic-gradient(from 0deg, var(--border) 0deg var(--sweep), transparent var(--sweep) 360deg); }
+  .countdown[hidden] { display: none; }
+  .countdown::before { content: ""; position: absolute; inset: 7px; border: 1px solid var(--border); border-radius: 50%; }
+  .countdown::after { content: ""; position: absolute; inset: -8px; background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat, linear-gradient(var(--border), var(--border)) center / 100% 1px no-repeat; }
+  .countdown span { font: 600 64px/1 ui-monospace, monospace; z-index: 1; }
+  .countdown-hand { position: absolute; inset: 0; transform: rotate(var(--sweep)); }
+  .countdown-hand::before { content: ""; position: absolute; left: 50%; top: 0; width: 1px; height: 50%; background: var(--muted); }
 </style>
 </head>
 <body>
@@ -128,13 +140,29 @@
   <h1>ANSWER FIRST</h1>
   <nav class="levels" id="levels"></nav>
   <p class="level-desc" id="level-desc"></p>
-  <label class="hint-toggle"><input type="checkbox" id="hint-toggle"> ヒント</label>
+  <div class="controls">
+    <label class="countdown-setting">カウントダウン
+      <select id="countdown-setting">
+        <option value="0">使わない</option>
+        <option value="3">3秒</option>
+        <option value="5" selected>5秒</option>
+        <option value="10">10秒</option>
+      </select>
+    </label>
+    <label class="hint-toggle"><input type="checkbox" id="hint-toggle"> ヒント</label>
+  </div>
   <section class="card">
     <p class="question" id="question"><span class="placeholder"></span></p>
     <p class="hint" id="hint" hidden></p>
   </section>
 
   <button id="next">次の質問</button>
+  <div class="countdown-slot">
+    <div class="countdown" id="countdown" hidden>
+      <div class="countdown-hand" aria-hidden="true"></div>
+      <span id="countdown-number"></span>
+    </div>
+  </div>
 
 </main>
 
@@ -149,6 +177,46 @@ const descEl = document.getElementById("level-desc");
 const hintEl = document.getElementById("hint");
 const hintToggle = document.getElementById("hint-toggle");
 let deck = [];
+const countdownSetting = document.getElementById("countdown-setting");
+const countdownEl = document.getElementById("countdown");
+const countdownNumber = document.getElementById("countdown-number");
+let countdownTimer = null;
+
+function stopCountdown() {
+  cancelAnimationFrame(countdownTimer);
+  countdownTimer = null;
+  countdownEl.hidden = true;
+}
+
+function startCountdown() {
+  stopCountdown();
+  const seconds = Number(countdownSetting.value);
+  if (!seconds) return;
+  const startedAt = performance.now();
+  countdownNumber.textContent = seconds;
+  countdownEl.style.setProperty("--sweep", "0deg");
+  countdownEl.hidden = false;
+  function tick(now) {
+    const elapsed = (now - startedAt) / 1000;
+    if (elapsed >= seconds) {
+      stopCountdown();
+      return;
+    }
+    countdownNumber.textContent = seconds - Math.floor(elapsed);
+    countdownEl.style.setProperty("--sweep", `${(elapsed % 1) * 360}deg`);
+    countdownTimer = requestAnimationFrame(tick);
+  }
+  countdownTimer = requestAnimationFrame(tick);
+}
+
+try {
+  const saved = localStorage.getItem("countdown_seconds");
+  if (["0", "3", "5", "10"].includes(saved)) countdownSetting.value = saved;
+} catch (e) {}
+countdownSetting.addEventListener("change", () => {
+  stopCountdown();
+  try { localStorage.setItem("countdown_seconds", countdownSetting.value); } catch (e) {}
+});
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -165,6 +233,7 @@ function next() {
   const q = deck.pop();
   qEl.textContent = q;
   showHint();
+  startCountdown();
 }
 
 function showHint() {
@@ -187,6 +256,7 @@ hintToggle.addEventListener("change", () => {
 });
 
 function selectLevel(key) {
+  stopCountdown();
   const level = LEVELS[key];
   QUESTIONS = level.questions;
   deck = [];
@@ -227,7 +297,7 @@ fetch("questions.json")
 
 document.getElementById("next").addEventListener("click", next);
 document.addEventListener("keydown", (e) => {
-  if (e.target.closest(".levels, .hint-toggle")) return;
+  if (e.target.closest(".levels, .controls")) return;
   if (e.key === " " || e.key === "Enter") { e.preventDefault(); next(); }
 });
 </script>

@@ -1,0 +1,4 @@
+.worktrees/
+auth.json
+internal_storage.json
+version.json
