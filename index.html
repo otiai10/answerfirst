@@ -176,7 +176,9 @@
   }
   .hint-toggle input:checked { background: var(--accent); border-color: var(--accent); }
   .hint-toggle input:checked::before { transform: translateX(18px); background: var(--accent-text); }
-  .countdown-setting { display: grid; gap: 12px; }
+  .countdown-setting { display: grid; gap: 12px; margin-bottom: 28px; }
+  .answer-time { height: 6px; margin-top: 24px; overflow: hidden; border-radius: 999px; background: var(--border); }
+  .answer-time-bar { width: 100%; height: 100%; background: var(--accent); }
   select { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
   .countdown-slot { height: 148px; display: grid; place-items: center; margin-top: 24px; }
   .countdown { --sweep: 0deg; width: 128px; height: 128px; position: relative; display: grid; place-items: center; border: 1px solid var(--muted); border-radius: 50%; color: var(--text); background: conic-gradient(from 0deg, var(--border) 0deg var(--sweep), transparent var(--sweep) 360deg); }
@@ -214,6 +216,14 @@
       <option value="10">10秒</option>
     </select>
   </label>
+  <label class="countdown-setting">回答制限時間
+    <select id="answer-time-setting">
+      <option value="0">なし</option>
+      <option value="10">10秒</option>
+      <option value="20">20秒</option>
+      <option value="30">30秒</option>
+    </select>
+  </label>
 </dialog>
 <main>
   <h1>ANSWER FIRST</h1>
@@ -223,6 +233,9 @@
     <p class="question" id="question"><span class="placeholder"></span></p>
     <p class="hint" id="hint" hidden></p>
   </section>
+  <div class="answer-time" id="answer-time" aria-hidden="true" hidden>
+    <div class="answer-time-bar" id="answer-time-bar"></div>
+  </div>
 
   <button id="next">次の質問</button>
   <div class="countdown-slot">
@@ -280,6 +293,37 @@ const countdownSetting = document.getElementById("countdown-setting");
 const countdownEl = document.getElementById("countdown");
 const countdownNumber = document.getElementById("countdown-number");
 let countdownTimer = null;
+const answerTimeSetting = document.getElementById("answer-time-setting");
+const answerTimeEl = document.getElementById("answer-time");
+const answerTimeBar = document.getElementById("answer-time-bar");
+let answerAnimation = null;
+
+function resetAnswerTime() {
+  if (answerAnimation) answerAnimation.cancel();
+  answerAnimation = null;
+  answerTimeEl.hidden = answerTimeSetting.value === "0";
+}
+
+function startAnswerTime() {
+  resetAnswerTime();
+  const seconds = Number(answerTimeSetting.value);
+  if (!seconds) return;
+  answerAnimation = answerTimeBar.animate(
+    [{ width: "100%" }, { width: "0%" }],
+    { duration: seconds * 1000, easing: "linear", fill: "forwards" }
+  );
+}
+
+try {
+  const saved = localStorage.getItem("answer_time_seconds");
+  if (["0", "10", "20", "30"].includes(saved)) answerTimeSetting.value = saved;
+} catch (e) {}
+resetAnswerTime();
+answerTimeSetting.addEventListener("change", () => {
+  stopCountdown();
+  resetAnswerTime();
+  try { localStorage.setItem("answer_time_seconds", answerTimeSetting.value); } catch (e) {}
+});
 
 function stopCountdown() {
   cancelAnimationFrame(countdownTimer);
@@ -290,7 +334,10 @@ function stopCountdown() {
 function startCountdown() {
   stopCountdown();
   const seconds = Number(countdownSetting.value);
-  if (!seconds) return;
+  if (!seconds) {
+    startAnswerTime();
+    return;
+  }
   const startedAt = performance.now();
   countdownNumber.textContent = seconds;
   countdownEl.style.setProperty("--sweep", "0deg");
@@ -299,6 +346,7 @@ function startCountdown() {
     const elapsed = (now - startedAt) / 1000;
     if (elapsed >= seconds) {
       stopCountdown();
+      startAnswerTime();
       return;
     }
     countdownNumber.textContent = seconds - Math.floor(elapsed);
@@ -314,6 +362,7 @@ try {
 } catch (e) {}
 countdownSetting.addEventListener("change", () => {
   stopCountdown();
+  resetAnswerTime();
   try { localStorage.setItem("countdown_seconds", countdownSetting.value); } catch (e) {}
 });
 
@@ -332,6 +381,7 @@ function next() {
   const q = deck.pop();
   qEl.textContent = q;
   showHint();
+  resetAnswerTime();
   startCountdown();
 }
 
@@ -356,6 +406,7 @@ hintToggle.addEventListener("change", () => {
 
 function selectLevel(key) {
   stopCountdown();
+  resetAnswerTime();
   const level = LEVELS[key];
   QUESTIONS = level.questions;
   deck = [];
