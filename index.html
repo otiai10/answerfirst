@@ -224,6 +224,7 @@
       <option value="30">30秒</option>
     </select>
   </label>
+  <label class="hint-toggle">エンドレスモード<input type="checkbox" id="endless-toggle" role="switch"></label>
 </dialog>
 <main>
   <h1>ANSWER FIRST</h1>
@@ -251,6 +252,7 @@
 const settingsPanel = document.getElementById("settings-panel");
 const settingsOpen = document.getElementById("settings-open");
 settingsOpen.addEventListener("click", () => {
+  stopSession();
   settingsPanel.showModal();
   settingsOpen.setAttribute("aria-expanded", "true");
 });
@@ -297,6 +299,27 @@ const answerTimeSetting = document.getElementById("answer-time-setting");
 const answerTimeEl = document.getElementById("answer-time");
 const answerTimeBar = document.getElementById("answer-time-bar");
 let answerAnimation = null;
+const endlessToggle = document.getElementById("endless-toggle");
+const nextButton = document.getElementById("next");
+let endlessRunning = false;
+
+function stopSession() {
+  endlessRunning = false;
+  stopCountdown();
+  resetAnswerTime();
+  nextButton.textContent = endlessToggle.checked ? "開始" : "次の質問";
+}
+
+function syncEndlessSetting() {
+  const enabled = endlessToggle.checked;
+  answerTimeSetting.querySelector('[value="0"]').disabled = enabled;
+  if (enabled && answerTimeSetting.value === "0") answerTimeSetting.value = "10";
+  stopSession();
+  try {
+    localStorage.setItem("endless", enabled ? "on" : "off");
+    localStorage.setItem("answer_time_seconds", answerTimeSetting.value);
+  } catch (e) {}
+}
 
 function resetAnswerTime() {
   if (answerAnimation) answerAnimation.cancel();
@@ -312,16 +335,20 @@ function startAnswerTime() {
     [{ width: "100%" }, { width: "0%" }],
     { duration: seconds * 1000, easing: "linear", fill: "forwards" }
   );
+  answerAnimation.onfinish = () => {
+    if (endlessRunning) next();
+  };
 }
 
 try {
   const saved = localStorage.getItem("answer_time_seconds");
   if (["0", "10", "20", "30"].includes(saved)) answerTimeSetting.value = saved;
 } catch (e) {}
-resetAnswerTime();
+try { endlessToggle.checked = localStorage.getItem("endless") === "on"; } catch (e) {}
+syncEndlessSetting();
+endlessToggle.addEventListener("change", syncEndlessSetting);
 answerTimeSetting.addEventListener("change", () => {
-  stopCountdown();
-  resetAnswerTime();
+  stopSession();
   try { localStorage.setItem("answer_time_seconds", answerTimeSetting.value); } catch (e) {}
 });
 
@@ -361,8 +388,7 @@ try {
   if (["0", "3", "5", "10"].includes(saved)) countdownSetting.value = saved;
 } catch (e) {}
 countdownSetting.addEventListener("change", () => {
-  stopCountdown();
-  resetAnswerTime();
+  stopSession();
   try { localStorage.setItem("countdown_seconds", countdownSetting.value); } catch (e) {}
 });
 
@@ -405,8 +431,7 @@ hintToggle.addEventListener("change", () => {
 });
 
 function selectLevel(key) {
-  stopCountdown();
-  resetAnswerTime();
+  stopSession();
   const level = LEVELS[key];
   QUESTIONS = level.questions;
   deck = [];
@@ -445,10 +470,25 @@ fetch("questions.json")
     qEl.textContent = "questions.json を読み込めませんでした。ローカルで開く場合は HTTP サーバー経由で開いてください。";
   });
 
-document.getElementById("next").addEventListener("click", next);
+function activateNext() {
+  if (!endlessToggle.checked) {
+    next();
+  } else if (endlessRunning) {
+    stopSession();
+  } else if (QUESTIONS.length) {
+    endlessRunning = true;
+    nextButton.textContent = "停止";
+    next();
+  }
+}
+
+nextButton.addEventListener("click", activateNext);
 document.addEventListener("keydown", (e) => {
   if (settingsPanel.open || e.target.closest(".levels, .settings-open")) return;
-  if (e.key === " " || e.key === "Enter") { e.preventDefault(); next(); }
+  if (e.key === " " || e.key === "Enter") {
+    e.preventDefault();
+    if (!e.repeat) activateNext();
+  }
 });
 </script>
 </body>
