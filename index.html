@@ -12,6 +12,8 @@
     --muted: #6b6a65;
     --accent: #1f4e79;
     --accent-text: #ffffff;
+    --stop-bg: #e6eef5;
+    --stop-text: #315878;
     --border: #e2e0d8;
   }
   @media (prefers-color-scheme: dark) {
@@ -22,6 +24,8 @@
       --muted: #9a998f;
       --accent: #7fb0e0;
       --accent-text: #10161c;
+      --stop-bg: #29343f;
+      --stop-text: #a1bbd3;
       --border: #34332e;
     }
   }
@@ -71,6 +75,7 @@
     cursor: pointer;
   }
   button:active { transform: translateY(1px); }
+  #next[data-running="true"] { background: var(--stop-bg); color: var(--stop-text); }
   .levels {
     display: flex;
     gap: 8px;
@@ -382,7 +387,12 @@ function stopSession() {
   stopSpeech();
   stopCountdown();
   resetAnswerTime();
-  nextButton.textContent = endlessToggle.checked ? "開始" : "次の質問";
+  updateNextButton();
+}
+
+function updateNextButton() {
+  nextButton.dataset.running = String(endlessRunning);
+  nextButton.textContent = endlessRunning ? "停止" : endlessToggle.checked ? "開始" : "次の質問";
 }
 
 function syncEndlessSetting() {
@@ -554,7 +564,7 @@ function activateNext() {
     stopSession();
   } else if (QUESTIONS.length) {
     endlessRunning = true;
-    nextButton.textContent = "停止";
+    updateNextButton();
     next();
   }
 }
